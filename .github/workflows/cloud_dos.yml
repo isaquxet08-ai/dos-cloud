@@ -32,8 +32,9 @@ jobs:
 
       - name: 5. Launch Web Terminal
         run: |
-          # 换到 8080 端口，避免冲突
-          ttyd -p 8080 -c admin:123456 bash &
+          # 加上 --client-option disableWebGL=true，强制手机端使用兼容渲染
+          ttyd -p 8080 -c admin:123456 --client-option disableWebGL=true bash &
+          
           cloudflared tunnel --url http://localhost:8080 > cloudflare.log 2>&1 &
           echo "Waiting for Cloudflare Tunnel URL..."
           for i in {1..30}; do
@@ -48,5 +49,4 @@ jobs:
             fi
             sleep 2
           done
-          # 保持工作流运行，给你留出操作时间
           sleep 600
