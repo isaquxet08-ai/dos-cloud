@@ -23,56 +23,78 @@ jobs:
 
       - name: 4. Download & Extract FreeDOS
         run: |
-          # 下载官方压缩包
           wget -O FD14-LiveCD.zip https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/distributions/1.4/FD14-LiveCD.zip
-          # 解压到 DOSsystem 目录，解压后里面就是 FD14LIVE.iso
           unzip FD14-LiveCD.zip -d DOSsystem/
-          echo "=== 检查一下解压出的文件 ==="
-          ls -lh DOSsystem/
 
-      - name: 5. Auto Install via Expect
+      - name: 5. Auto Install (Smart Pattern Matching)
         run: |
           cat << 'EXPEOF' > auto_install.exp
           #!/usr/bin/expect -f
-          set timeout 120
-          # 这里的路径与解压出来的完全一致
+          set timeout 300
           spawn qemu-system-i386 -cdrom DOSsystem/FD14LIVE.iso -hda VmsystemDOS/dos_disk.img -m 32 -nographic
-          expect "Welcome to FreeDOS"
-          sleep 2
-          send "\033\[B"
-          sleep 1
-          send "\033\[B"
-          sleep 1
-          send "\r"
-          sleep 4
-          send "\r"
-          sleep 2
-          send "\r"
-          sleep 4
+          
+          # 1. 极速响应模式：监听屏幕上的关键文字，出现哪个就执行对应操作
           expect {
-              "partition your drive" { send "y\r" }
-              "Proceed with Format" { send "y\r" }
-              timeout { }
-          }
-          sleep 3
-          send "y\r"
-          sleep 2
-          send "y\r"
-          sleep 2
-          send "\r"
-          sleep 6
-          send "\r"
-          sleep 6
-          send "\r"
-          while {1} {
-              expect {
-                  "Press a key" { send "\r" }
-                  "Reboot" { send "y\r" }
-                  "Continue" { send "\r" }
-                  eof { break }
-                  timeout { send "\r" }
+              "Welcome to FreeDOS" {
+                  sleep 1
+                  send "\033\[B"; sleep 0.5; send "\033\[B"; sleep 0.5; send "\r"
+                  exp_continue
               }
-              sleep 5
+              "preferred language" {
+                  sleep 1
+                  send "\r"
+                  exp_continue
+              }
+              "keyboard layout" {
+                  sleep 1
+                  send "\r"
+                  exp_continue
+              }
+              "Do you want to partition" {
+                  sleep 1
+                  send "y\r"
+                  exp_continue
+              }
+              "Set active partition" {
+                  # 如果它问激活分区，通常按1然后回车
+                  sleep 1
+                  send "1\r"
+                  exp_continue
+              }
+              "Proceed with Format" {
+                  sleep 1
+                  send "y\r"
+                  exp_continue
+              }
+              "Press a key" {
+                  sleep 1
+                  send "\r"
+                  exp_continue
+              }
+              "Reboot" {
+                  sleep 1
+                  send "y\r"
+                  exp_continue
+              }
+              "installation complete" {
+                  sleep 2
+                  send "\r"
+                  exp_continue
+              }
+              # 应对安装向导的各种默认Yes
+              "Continue" {
+                  sleep 1
+                  send "\r"
+                  exp_continue
+              }
+              # 如果跑完所有流程，超时退出（避免死循环）
+              timeout {
+                  send "\r"
+                  exp_continue
+              }
+              eof {
+                  exit 0
+              }
           }
           EXPEOF
           chmod +x auto_install.exp
