@@ -21,9 +21,10 @@ jobs:
           mkdir -p VmsystemDOS
           qemu-img create -f qcow2 VmsystemDOS/dos_disk.img 200M
 
-      - name: 4. Download ISO to DOSsystem
+      - name: 4. Download ISO from Official Mirror
         run: |
-          wget -O DOSsystem/FD14LIVE.iso https://www.ibiblio.org/hosted/freedos/files/distributions/1.4/FD14LIVE.iso
+          # 官方源，微软服务器直连，秒下！
+          wget -O DOSsystem/FD14LIVE.iso https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/distributions/1.4/FD14LIVE.iso
 
       - name: 5. Auto Install via Expect
         run: |
