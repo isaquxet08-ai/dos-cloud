@@ -26,68 +26,50 @@ jobs:
           wget -O FD14-LiveCD.zip https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/distributions/1.4/FD14-LiveCD.zip
           unzip FD14-LiveCD.zip -d DOSsystem/
 
-      - name: 5. Auto Install (Highlight Recognition)
+      - name: 5. Auto Install (Smart Selection)
         run: |
           cat << 'EXPEOF' > auto_install.exp
           #!/usr/bin/expect -f
           set timeout 300
           spawn qemu-system-i386 -cdrom DOSsystem/FD14LIVE.iso -hda VmsystemDOS/dos_disk.img -m 32 -nographic
           
-          # 核心循环：让 expect 像人眼一样扫描屏幕
+          # 等待菜单出现
+          expect "Welcome to FreeDOS"
+          sleep 2
+          
+          # 开始“视觉寻路”：我们不断发送下方向键，直到屏幕上出现高亮的 "Install to harddisk"
+          # \033\[7m 是终端的反色高亮码，.* 代表中间的任意字符
+          set selected 0
+          while {$selected == 0} {
+              # 监听 1 秒内的输出，看看当前高亮的是不是目标
+              expect {
+                  -re {.*\033\[7m.*Install to harddisk.*} {
+                      # 找到了高亮目标！停止循环
+                      set selected 1
+                  }
+                  timeout {
+                      # 没找到，说明高亮还在其他选项上，再按一次下方向键
+                      send "\033\[B"
+                  }
+              }
+          }
+          
+          # 确认高亮在目标上后，按下回车
+          sleep 1
+          send "\r"
+          
+          # 接下来进入安装向导，开启精准文字匹配
           expect {
-              # 1. 捕捉主菜单的高亮：看屏幕上是否出现被高亮反色包裹的 "Install to harddisk"
-              # \033\[7m 是终端的反色高亮控制符
-              -re {.*\033\[7m.*Install to harddisk.*} {
-                  sleep 1
-                  send "\r"
-                  exp_continue
-              }
-              
-              # 2. 识别语言选择的高亮
-              -re {.*\033\[7m.*English.*} {
-                  sleep 1
-                  send "\r"
-                  exp_continue
-              }
-              
-              # 3. 识别格式化的提示
-              "Proceed with Format" {
-                  sleep 1
-                  send "y\r"
-                  exp_continue
-              }
-              
-              # 4. 识别重启提示（第一轮分区完重启，或者最后装完重启）
-              "Please reboot now" {
-                  sleep 2
-                  send "y\r"
-                  exp_continue
-              }
-
-              # 5. 识别安装包选择界面，默认高亮的是全量安装，直接回车
-              "packages do you want to install" {
-                  sleep 2
-                  send "\r"
-                  exp_continue
-              }
-              
-              # 6. 自动按任意键继续
-              "Press a key" {
-                  sleep 1
-                  send "\r"
-                  exp_continue
-              }
-
-              # 超时容错：如果一直卡着没动静，稍微按一下回车尝试唤醒
-              timeout {
-                  send "\r"
-                  exp_continue
-              }
-              
-              # 进程结束
-              eof {
-                  exit 0
-              }
+              "preferred language" { sleep 1; send "\r"; exp_continue }
+              "keyboard layout" { sleep 1; send "\r"; exp_continue }
+              "Do you want to partition" { sleep 1; send "y\r"; exp_continue }
+              "Proceed with Format" { sleep 1; send "y\r"; exp_continue }
+              "Press any key" { sleep 1; send "\r"; exp_continue }
+              "Press a key" { sleep 1; send "\r"; exp_continue }
+              "Please reboot now" { sleep 1; send "y\r"; exp_continue }
+              "packages do you want to install" { sleep 2; send "\r"; exp_continue }
+              timeout { send "\r"; exp_continue }
+              eof { exit 0 }
           }
           EXPEOF
           chmod +x auto_install.exp
