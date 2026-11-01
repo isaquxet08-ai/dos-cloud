@@ -1,0 +1,72 @@
+name: Cloud Build DOS System
+on:
+  workflow_dispatch:
+jobs:
+  build-dos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Repo
+        uses: actions/checkout@v4
+      - name: 2. Prepare Directories
+        run: |
+          mkdir -p DOSsystem
+          mkdir -p VmsystemDOS
+          qemu-img create -f qcow2 VmsystemDOS/dos_disk.img 200M
+      - name: 3. Install QEMU & Expect
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 expect wget
+      - name: 4. Download ISO
+        run: |
+          wget -O DOSsystem/FD14LIVE.iso https://www.ibiblio.org/hosted/freedos/files/distributions/1.4/FD14LIVE.iso
+      - name: 5. Auto Install via Expect
+        run: |
+          cat << 'EXPEOF' > auto_install.exp
+          #!/usr/bin/expect -f
+          set timeout 120
+          spawn qemu-system-i386 -cdrom DOSsystem/FD14LIVE.iso -hda VmsystemDOS/dos_disk.img -m 32 -nographic
+          expect "Welcome to FreeDOS"
+          sleep 2
+          send "\033\[B"
+          sleep 1
+          send "\033\[B"
+          sleep 1
+          send "\r"
+          sleep 4
+          send "\r"
+          sleep 2
+          send "\r"
+          sleep 4
+          expect {
+              "partition your drive" { send "y\r" }
+              "Proceed with Format" { send "y\r" }
+              timeout { }
+          }
+          sleep 3
+          send "y\r"
+          sleep 2
+          send "y\r"
+          sleep 2
+          send "\r"
+          sleep 6
+          send "\r"
+          sleep 6
+          send "\r"
+          while {1} {
+              expect {
+                  "Press a key" { send "\r" }
+                  "Reboot" { send "y\r" }
+                  "Continue" { send "\r" }
+                  eof { break }
+                  timeout { send "\r" }
+              }
+              sleep 5
+          }
+          EXPEOF
+          chmod +x auto_install.exp
+          ./auto_install.exp || true
+      - name: 6. Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DOS-Disk
+          path: VmsystemDOS/
