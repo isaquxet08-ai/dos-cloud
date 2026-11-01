@@ -26,72 +26,65 @@ jobs:
           wget -O FD14-LiveCD.zip https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/distributions/1.4/FD14-LiveCD.zip
           unzip FD14-LiveCD.zip -d DOSsystem/
 
-      - name: 5. Auto Install (Smart Pattern Matching)
+      - name: 5. Auto Install (Highlight Recognition)
         run: |
           cat << 'EXPEOF' > auto_install.exp
           #!/usr/bin/expect -f
           set timeout 300
           spawn qemu-system-i386 -cdrom DOSsystem/FD14LIVE.iso -hda VmsystemDOS/dos_disk.img -m 32 -nographic
           
-          # 1. 极速响应模式：监听屏幕上的关键文字，出现哪个就执行对应操作
+          # 核心循环：让 expect 像人眼一样扫描屏幕
           expect {
-              "Welcome to FreeDOS" {
-                  sleep 1
-                  send "\033\[B"; sleep 0.5; send "\033\[B"; sleep 0.5; send "\r"
-                  exp_continue
-              }
-              "preferred language" {
+              # 1. 捕捉主菜单的高亮：看屏幕上是否出现被高亮反色包裹的 "Install to harddisk"
+              # \033\[7m 是终端的反色高亮控制符
+              -re {.*\033\[7m.*Install to harddisk.*} {
                   sleep 1
                   send "\r"
                   exp_continue
               }
-              "keyboard layout" {
+              
+              # 2. 识别语言选择的高亮
+              -re {.*\033\[7m.*English.*} {
                   sleep 1
                   send "\r"
                   exp_continue
               }
-              "Do you want to partition" {
-                  sleep 1
-                  send "y\r"
-                  exp_continue
-              }
-              "Set active partition" {
-                  # 如果它问激活分区，通常按1然后回车
-                  sleep 1
-                  send "1\r"
-                  exp_continue
-              }
+              
+              # 3. 识别格式化的提示
               "Proceed with Format" {
                   sleep 1
                   send "y\r"
                   exp_continue
               }
+              
+              # 4. 识别重启提示（第一轮分区完重启，或者最后装完重启）
+              "Please reboot now" {
+                  sleep 2
+                  send "y\r"
+                  exp_continue
+              }
+
+              # 5. 识别安装包选择界面，默认高亮的是全量安装，直接回车
+              "packages do you want to install" {
+                  sleep 2
+                  send "\r"
+                  exp_continue
+              }
+              
+              # 6. 自动按任意键继续
               "Press a key" {
                   sleep 1
                   send "\r"
                   exp_continue
               }
-              "Reboot" {
-                  sleep 1
-                  send "y\r"
-                  exp_continue
-              }
-              "installation complete" {
-                  sleep 2
-                  send "\r"
-                  exp_continue
-              }
-              # 应对安装向导的各种默认Yes
-              "Continue" {
-                  sleep 1
-                  send "\r"
-                  exp_continue
-              }
-              # 如果跑完所有流程，超时退出（避免死循环）
+
+              # 超时容错：如果一直卡着没动静，稍微按一下回车尝试唤醒
               timeout {
                   send "\r"
                   exp_continue
               }
+              
+              # 进程结束
               eof {
                   exit 0
               }
